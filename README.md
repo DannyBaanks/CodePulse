@@ -10,8 +10,6 @@
 
 <p align="center">
   <a href="https://github.com/DannyBaanks/CodePulse/actions/workflows/ci.yml?query=branch%3Amaster"><img src="https://github.com/DannyBaanks/CodePulse/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI Status"/></a>
-  <a href="https://pypi.org/project/codepulse/"><img src="https://img.shields.io/pypi/v/codepulse.svg" alt="PyPI Version"/></a>
-  <a href="https://pypi.org/project/codepulse/"><img src="https://img.shields.io/pypi/pyversions/codepulse.svg" alt="Python Versions"/></a>
   <a href="https://github.com/DannyBaanks/CodePulse/blob/master/LICENSE"><img src="https://img.shields.io/github/license/DannyBaanks/CodePulse.svg" alt="License"/></a>
   <a href="https://github.com/DannyBaanks/CodePulse/stargazers"><img src="https://img.shields.io/github/stars/DannyBaanks/CodePulse.svg?style=social" alt="GitHub Stars"/></a>
   <a href="https://github.com/DannyBaanks/CodePulse/issues"><img src="https://img.shields.io/github/issues/DannyBaanks/CodePulse.svg" alt="Issues"/></a>

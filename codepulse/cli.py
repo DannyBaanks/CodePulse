@@ -750,6 +750,11 @@ fi
         return 1
 
 
+def install_hook_entrypoint() -> None:
+    """Install the pre-commit hook in the current repository."""
+    raise SystemExit(install_hook(Path.cwd()))
+
+
 def run_scan(args, repo_path: Path, repo_name: str) -> int:
     """Run the scan command."""
     print(f"  Analyzing: {repo_path}")

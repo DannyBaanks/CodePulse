@@ -25,6 +25,7 @@ dev = ["mypy>=1.13", "pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.8"]
 
 [project.scripts]
 codepulse = "codepulse.cli:main"
+codepulse-install-hook = "codepulse.cli:install_hook_entrypoint"
 
 [tool.setuptools.packages.find]
 include = ["codepulse*"]
