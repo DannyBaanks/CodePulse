@@ -16,7 +16,7 @@ BANNER = r"""
  | |   / _ \ / _` |/ _ \| |  _ / __/ _` | '_ \| '_ \ / _ \ '__|
  | |__| (_) | (_| |  __/| |_| || (_| (_| | | | | | | |  __/ |
   \____\___/ \__,_|\___| \____|\___\__,_|_| |_|_| |_|\___|_|
-                    AI-Powered Code Health Scorecard
+          Deterministic Code Health Scorecard + Optional AI
 """
 
 
