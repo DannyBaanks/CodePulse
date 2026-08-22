@@ -270,7 +270,7 @@ def _has_test_imports(tree: ast.AST) -> bool:
 
 
 def analyze_testing(repo_path: Path) -> tuple[float, list[dict]]:
-    """Evaluate test coverage and infrastructure.
+    """Evaluate test structure and infrastructure signals.
 
     Returns (score, issues) where score is 0‑100.
     """

@@ -1,4 +1,4 @@
-"""CodePulse CLI - AI-powered code health scorecard tool."""
+"""CodePulse CLI: deterministic code health scorecard with optional AI prioritization."""
 
 import argparse
 import json
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
         # Standard parsing with subcommands
         parser = argparse.ArgumentParser(
             prog="codepulse",
-            description="AI-powered code health scorecard tool.",
+            description="Deterministic code health scorecard with optional AI prioritization.",
             epilog="Example: codepulse . --output report.html --format html",
         )
         subparsers = parser.add_subparsers(dest="command", help="Available commands", required=False)
@@ -84,7 +84,7 @@ def parse_args() -> argparse.Namespace:
         # Parse as scan with all args
         parser = argparse.ArgumentParser(
             prog="codepulse",
-            description="AI-powered code health scorecard tool.",
+            description="Deterministic code health scorecard with optional AI prioritization.",
             epilog="Example: codepulse . --output report.html --format html",
             add_help=False,
         )
@@ -130,7 +130,7 @@ def _print_help(command=None):
     else:
         # Main help
         parser = argparse.ArgumentParser(prog="codepulse", add_help=False)
-        parser.description = "AI-powered code health scorecard tool."
+        parser.description = "Deterministic code health scorecard with optional AI prioritization."
         parser.epilog = "Example: codepulse . --output report.html --format html"
         subparsers = parser.add_subparsers(dest="command", help="Available commands")
         
@@ -179,7 +179,7 @@ def run_analyzers(repo_path: Path) -> dict:
     analyzers = [
         ("security", "Analyzing security vulnerabilities", analyze_security),
         ("complexity", "Analyzing code complexity", analyze_complexity),
-        ("testing", "Analyzing test coverage", analyze_testing),
+        ("testing", "Analyzing test signals", analyze_testing),
         ("documentation", "Analyzing documentation quality", analyze_documentation),
         ("dependencies", "Analyzing dependencies", analyze_dependencies),
         ("structure", "Analyzing project structure", analyze_structure),

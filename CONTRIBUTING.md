@@ -64,7 +64,7 @@ Please use the GitHub issue tracker for bug reports and feature requests.
 
 ## Security
 
-If you find a security vulnerability, please report it via email to the maintainer instead of opening a public issue.
+Do not open a public issue for a suspected vulnerability. Follow the private reporting process in [SECURITY.md](SECURITY.md).
 
 ## License
 

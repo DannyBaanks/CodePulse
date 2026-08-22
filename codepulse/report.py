@@ -68,6 +68,7 @@ def _issues_html(issues_by_category: dict[str, list[dict[str, Any]]]) -> str:
         rows = []
         for issue in issues:
             severity = str(issue.get("severity", "low"))
+            category_name = str(issue.get("category", category))
             location = f"{issue.get('file', '')}:{issue.get('line', '')}" if issue.get("file") else ""
             evidence = [f"Message: {html.escape(str(issue.get('message', '')))}"]
             if location:
@@ -76,6 +77,7 @@ def _issues_html(issues_by_category: dict[str, list[dict[str, Any]]]) -> str:
             rows.append(
                 f"<li class='issue severity-{html.escape(severity)}'><div class='issue-header'>"
                 f"<span class='sev-badge'>{html.escape(severity.upper())}</span>"
+                f"<span class='issue-category'>{html.escape(category_name)}</span>"
                 f"<span class='issue-message'>{html.escape(str(issue.get('message', '')))}</span>"
                 f"<span class='file-info'>{html.escape(location)}</span>"
                 "<button class='evidence-toggle' type='button'>Show evidence</button>"
