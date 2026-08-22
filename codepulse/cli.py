@@ -165,7 +165,7 @@ def show_progress(message: str) -> None:
     print(f"  [*] {message}...")
 
 
-def run_analyzers(repo_path: Path) -> dict:
+def run_analyzers(repo_path: Path, config: dict[str, Any] | None = None) -> dict:
     """Run all code analyzers and return collected results."""
     from codepulse.analyzers import (
         analyze_complexity,
@@ -175,6 +175,11 @@ def run_analyzers(repo_path: Path) -> dict:
         analyze_structure,
         analyze_testing,
     )
+
+    if config is None:
+        from codepulse.config import load_config
+
+        config = load_config(repo_path)
 
     analyzers = [
         ("security", "Analyzing security vulnerabilities", analyze_security),
@@ -191,7 +196,7 @@ def run_analyzers(repo_path: Path) -> dict:
     for analyzer_name, message, analyzer_func in analyzers:
         show_progress(message)
         try:
-            score, issues = analyzer_func(repo_path)
+            score, issues = analyzer_func(repo_path, config)
             results[analyzer_name] = score
             for issue in issues:
                 issue["category"] = analyzer_name
@@ -206,7 +211,7 @@ def run_analyzers(repo_path: Path) -> dict:
             print(f"  [!] Error in '{analyzer_name}' analyzer: {e}")
             results[analyzer_name] = 0.0
 
-    return {"scores": results, "issues": all_issues}
+    return {"scores": results, "issues": all_issues, "config": config}
 
 
 def compute_scorecard(results: dict):
@@ -230,7 +235,9 @@ def compute_scorecard(results: dict):
         dim_issues[cat].append(issue)
 
     # Compute scorecard with issues for evidence
-    sc = compute_sc(dim_scores, dim_issues)
+    from codepulse.config import get_weights
+
+    sc = compute_sc(dim_scores, dim_issues, weights=get_weights(results.get("config")))
 
     # Group issues by category
     issues_by_cat: dict[str, list[dict[str, Any]]] = {}
@@ -729,6 +736,9 @@ themeBtn.textContent = document.body.classList.contains('light') ? '[Sun]' : '[M
 
 def install_hook(repo_path: Path) -> int:
     """Install pre-commit hook."""
+    if not (repo_path / ".git").exists():
+        print(f"  Error: Not a Git repository: {repo_path}")
+        return 1
     hook_path = repo_path / ".git" / "hooks" / "pre-commit"
     hook_content = """#!/bin/sh
 # CodePulse pre-commit hook

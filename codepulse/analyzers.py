@@ -6,7 +6,11 @@ plus a list of issues found.
 
 import ast
 import re
+from fnmatch import fnmatch
 from pathlib import Path
+from typing import Any
+
+from .config import get_exclusions, get_security_config, get_thresholds
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -20,11 +24,17 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
 
 
-def _python_files(repo: Path):
+def _python_files(repo: Path, exclusions: list[str] | None = None):
     """Yield all .py files under *repo*, skipping common non‑source dirs."""
     skip = {".git", "__pycache__", ".tox", ".eggs", "node_modules", ".mypy_cache"}
     for p in repo.rglob("*.py"):
         if any(part in skip for part in p.parts):
+            continue
+        relative = p.relative_to(repo).as_posix()
+        if exclusions and any(
+            fnmatch(relative, pattern) or (pattern.endswith("/") and relative.startswith(pattern))
+            for pattern in exclusions
+        ):
             continue
         yield p
 
@@ -136,7 +146,7 @@ def _check_unsafe_calls(tree: ast.AST, filepath: str, rel: str, issues: list[dic
                 issues.append({"severity": "high", "message": "Use of os.system()", "file": rel, "line": node.lineno})
 
 
-def analyze_security(repo_path: Path) -> tuple[float, list[dict]]:
+def analyze_security(repo_path: Path, config: dict[str, Any] | None = None) -> tuple[float, list[dict]]:
     """Detect hardcoded secrets and unsafe code patterns using AST.
 
     Returns (score, issues) where score is 0‑100.
@@ -144,22 +154,25 @@ def analyze_security(repo_path: Path) -> tuple[float, list[dict]]:
     try:
         issues: list[dict] = []
         repo = Path(repo_path)
+        exclusions = get_exclusions(config or {}).get("patterns", [])
+        security_config = get_security_config(config or {})
 
-        for py in _python_files(repo):
+        for py in _python_files(repo, exclusions):
             rel = str(py.relative_to(repo))
             source = _safe_read(py)
             lines = source.splitlines()
 
             # 1. Secret patterns (line-based, but skip comments/docstrings roughly)
             is_test = _is_test_file(py)
-            secret_severity = "high" if is_test else "critical"
-            for lineno, line in enumerate(lines, 1):
-                stripped = line.strip()
-                if stripped.startswith("#"):
-                    continue
-                for pat, msg in _SECRET_PATTERNS:
-                    if pat.search(line):
-                        issues.append({"severity": secret_severity, "message": msg, "file": rel, "line": lineno})
+            if not (is_test and security_config.get("skip_test_files_for_secrets", True)):
+                secret_severity = security_config.get("secret_severity_in_tests", "high") if is_test else "critical"
+                for lineno, line in enumerate(lines, 1):
+                    stripped = line.strip()
+                    if stripped.startswith("#"):
+                        continue
+                    for pat, msg in _SECRET_PATTERNS:
+                        if pat.search(line):
+                            issues.append({"severity": secret_severity, "message": msg, "file": rel, "line": lineno})
 
             # 2. AST-based unsafe call detection (no false positives from strings)
             tree = _parse_ast(py)
@@ -196,7 +209,7 @@ def _cyclomatic_complexity(node: ast.AST) -> int:
     return complexity
 
 
-def analyze_complexity(repo_path: Path) -> tuple[float, list[dict]]:
+def analyze_complexity(repo_path: Path, config: dict[str, Any] | None = None) -> tuple[float, list[dict]]:
     """Measure cyclomatic complexity and file/function size.
 
     Returns (score, issues) where score is 0‑100.
@@ -204,14 +217,16 @@ def analyze_complexity(repo_path: Path) -> tuple[float, list[dict]]:
     try:
         issues: list[dict] = []
         repo = Path(repo_path)
+        thresholds = get_thresholds(config or {})
+        exclusions = get_exclusions(config or {}).get("patterns", [])
         complexities: list[int] = []
 
-        for py in _python_files(repo):
+        for py in _python_files(repo, exclusions):
             rel = str(py.relative_to(repo))
             source = _safe_read(py)
             lines = source.splitlines()
-            if len(lines) > 500:
-                issues.append({"severity": "medium", "message": f"File has {len(lines)} lines (>500)", "file": rel, "line": 1})
+            if len(lines) > thresholds["max_file_lines"]:
+                issues.append({"severity": "medium", "message": f"File has {len(lines)} lines (>{thresholds['max_file_lines']})", "file": rel, "line": 1})
 
             tree = _parse_ast(py)
             if tree is None:
@@ -221,16 +236,16 @@ def analyze_complexity(repo_path: Path) -> tuple[float, list[dict]]:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     cc = _cyclomatic_complexity(node)
                     complexities.append(cc)
-                    if cc > 10:
-                        sev = "high" if cc > 20 else "medium"
+                    if cc > thresholds["complexity"]:
+                        sev = "high" if cc > thresholds["complexity"] * 2 else "medium"
                         issues.append({"severity": sev, "message": f"Function '{node.name}' has complexity {cc}", "file": rel, "line": node.lineno})
                     args = len(node.args.args) + len(node.args.posonlyargs) + len(node.args.kwonlyargs)
                     if node.args.vararg:
                         args += 1
                     if node.args.kwarg:
                         args += 1
-                    if args > 7:
-                        issues.append({"severity": "low", "message": f"Function '{node.name}' has {args} parameters (>7)", "file": rel, "line": node.lineno})
+                    if args > thresholds["max_params"]:
+                        issues.append({"severity": "low", "message": f"Function '{node.name}' has {args} parameters (>{thresholds['max_params']})", "file": rel, "line": node.lineno})
 
         avg = sum(complexities) / len(complexities) if complexities else 0
         penalty = 0.0
@@ -269,7 +284,7 @@ def _has_test_imports(tree: ast.AST) -> bool:
     return False
 
 
-def analyze_testing(repo_path: Path) -> tuple[float, list[dict]]:
+def analyze_testing(repo_path: Path, config: dict[str, Any] | None = None) -> tuple[float, list[dict]]:
     """Evaluate test structure and infrastructure signals.
 
     Returns (score, issues) where score is 0‑100.
@@ -277,13 +292,15 @@ def analyze_testing(repo_path: Path) -> tuple[float, list[dict]]:
     try:
         issues: list[dict] = []
         repo = Path(repo_path)
+        thresholds = get_thresholds(config or {})
+        exclusions = get_exclusions(config or {}).get("patterns", [])
 
         source_files = 0
         test_files = 0
         has_test_dir = False
         has_test_imports = False
 
-        for py in _python_files(repo):
+        for py in _python_files(repo, exclusions):
             name = py.name
             rel = str(py.relative_to(repo))
             parts = set(py.relative_to(repo).parts)
@@ -310,13 +327,14 @@ def analyze_testing(repo_path: Path) -> tuple[float, list[dict]]:
 
         ratio = test_files / max(source_files, 1)
         score = 0.0
-        if ratio >= 0.4:
+        minimum_ratio = float(thresholds["min_test_ratio"])
+        if ratio >= minimum_ratio * 1.6:
             score = 100
-        elif ratio >= 0.25:
+        elif ratio >= minimum_ratio:
             score = 90
-        elif ratio >= 0.15:
+        elif ratio >= minimum_ratio * 0.6:
             score = 80
-        elif ratio >= 0.05:
+        elif ratio >= minimum_ratio * 0.2:
             score = 60
         elif ratio > 0:
             score = 40
@@ -351,7 +369,7 @@ def _iter_functions_and_classes(tree: ast.AST):
             yield node
 
 
-def analyze_documentation(repo_path: Path) -> tuple[float, list[dict]]:
+def analyze_documentation(repo_path: Path, config: dict[str, Any] | None = None) -> tuple[float, list[dict]]:
     """Assess README, docstrings, and type‑hint coverage.
 
     Returns (score, issues) where score is 0‑100.
@@ -359,6 +377,7 @@ def analyze_documentation(repo_path: Path) -> tuple[float, list[dict]]:
     try:
         issues: list[dict] = []
         repo = Path(repo_path)
+        exclusions = get_exclusions(config or {}).get("patterns", [])
 
         # README
         readme = None
@@ -381,7 +400,7 @@ def analyze_documentation(repo_path: Path) -> tuple[float, list[dict]]:
         total_params = 0
         typed_params = 0
 
-        for py in _python_files(repo):
+        for py in _python_files(repo, exclusions):
             rel = str(py.relative_to(repo))
             tree = _parse_ast(py)
             if tree is None:
@@ -434,7 +453,7 @@ _KNOWN_PROBLEMATIC = {"fabric2", "fabric", "sudo", "pycrypto", "pycrypto2"}
 _PINNED_RE = re.compile(r"^[A-Za-z0-9_\-]+(.txt|\.toml|\.cfg)?(?===)")
 
 
-def analyze_dependencies(repo_path: Path) -> tuple[float, list[dict]]:
+def analyze_dependencies(repo_path: Path, config: dict[str, Any] | None = None) -> tuple[float, list[dict]]:
     """Audit dependency files for hygiene.
 
     Returns (score, issues) where score is 0‑100.
@@ -502,7 +521,7 @@ def analyze_dependencies(repo_path: Path) -> tuple[float, list[dict]]:
 # 6. Structure
 # ---------------------------------------------------------------------------
 
-def analyze_structure(repo_path: Path) -> tuple[float, list[dict]]:
+def analyze_structure(repo_path: Path, config: dict[str, Any] | None = None) -> tuple[float, list[dict]]:
     """Evaluate project scaffolding and packaging.
 
     Returns (score, issues) where score is 0‑100.
@@ -510,11 +529,12 @@ def analyze_structure(repo_path: Path) -> tuple[float, list[dict]]:
     try:
         issues: list[dict] = []
         repo = Path(repo_path)
+        exclusions = get_exclusions(config or {}).get("patterns", [])
         score = 0.0
 
         # __init__.py presence in source packages
         py_dirs = set()
-        for py in _python_files(repo):
+        for py in _python_files(repo, exclusions):
             py_dirs.add(py.parent)
 
         missing_init = [d for d in py_dirs if not (d / "__init__.py").is_file() and d != repo]

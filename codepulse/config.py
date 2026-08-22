@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +85,23 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def _normalize_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Accept the documented flat keys as well as grouped configuration."""
+    normalized = config.copy()
+    thresholds = dict(normalized.get("thresholds", {}))
+    for key in ("complexity", "max_file_lines", "max_params", "min_test_ratio"):
+        if key in normalized:
+            thresholds[key] = normalized[key]
+    if thresholds:
+        normalized["thresholds"] = thresholds
+
+    if "exclude_patterns" in normalized:
+        exclusions = dict(normalized.get("exclusions", {}))
+        exclusions["patterns"] = normalized["exclude_patterns"]
+        normalized["exclusions"] = exclusions
+    return normalized
+
+
 def load_config(repo_path: Path | None = None) -> dict[str, Any]:
     """Load configuration from pyproject.toml or .codepulse.toml.
 
@@ -96,12 +114,12 @@ def load_config(repo_path: Path | None = None) -> dict[str, Any]:
     if repo_path is None:
         repo_path = Path.cwd()
 
-    config = DEFAULT_CONFIG.copy()
+    config = deepcopy(DEFAULT_CONFIG)
 
     # Try to load from pyproject.toml or .codepulse.toml
     config_file = _find_config_file(Path(repo_path).resolve())
     if config_file:
-        file_config = _load_toml_config(config_file)
+        file_config = _normalize_config(_load_toml_config(config_file))
         config = _deep_merge(config, file_config)
 
     # Override with environment variables (for CI)

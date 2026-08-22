@@ -120,7 +120,11 @@ def generate_summary(overall_score: float, overall_grade: str, dimensions: dict[
     return " ".join(parts)
 
 
-def compute_scorecard(dimension_scores: dict[str, float], dimension_issues: dict[str, list[dict]] | None = None) -> Scorecard:
+def compute_scorecard(
+    dimension_scores: dict[str, float],
+    dimension_issues: dict[str, list[dict]] | None = None,
+    weights: dict[str, float] | None = None,
+) -> Scorecard:
     """Compute a full scorecard from raw dimension scores.
 
     Args:
@@ -144,7 +148,7 @@ def compute_scorecard(dimension_scores: dict[str, float], dimension_issues: dict
         evidence = _generate_evidence(name, clamped, issues)
         dimensions[name] = DimensionScore(score=clamped, grade=grade, issues=issues, evidence=evidence)
 
-    weights = get_weights()
+    weights = weights or get_weights()
     overall_score = 0.0
     for name, weight in weights.items():
         if name in dimensions:

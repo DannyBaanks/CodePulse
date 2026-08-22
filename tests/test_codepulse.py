@@ -17,8 +17,12 @@ from codepulse.analyzers import (
     analyze_structure,
     analyze_testing,
 )
+from codepulse.cli import compute_scorecard as compute_cli_scorecard
+from codepulse.cli import install_hook, run_analyzers
+from codepulse.diff import format_diff
 from codepulse.scorer import (
     WEIGHTS,
+    DimensionScore,
     Scorecard,
     _clamp,
     _score_to_grade,
@@ -404,6 +408,26 @@ class TestIntegration:
         )
         assert result.returncode != 0
 
+    def test_config_applies_thresholds_and_exclusions(self, tmp_path: Path):
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.codepulse]\n"
+            "max_file_lines = 1\n"
+            "exclude_patterns = ['ignored.py']\n"
+            "weights = { security = 1.0, complexity = 0.0, testing = 0.0, documentation = 0.0, dependencies = 0.0, structure = 0.0 }\n"
+        )
+        (tmp_path / "app.py").write_text("x = 1\ny = 2\n")
+        (tmp_path / "ignored.py").write_text("password = 'abc123defghi'\n")
+
+        results = run_analyzers(tmp_path)
+        _, scorecard = compute_cli_scorecard(results)
+
+        assert any("(>1)" in issue["message"] for issue in scorecard["issues"])
+        assert not any(issue["file"] == "ignored.py" for issue in scorecard["issues"])
+        assert scorecard["overall_score"] == scorecard["dimensions"]["security"]["score"]
+
+    def test_install_hook_rejects_non_git_directory(self, tmp_path: Path):
+        assert install_hook(tmp_path) == 1
+
 
 # ===========================================================================
 # 4. AI insights tests
@@ -554,3 +578,21 @@ class TestDeterminism:
         for dim in data1["scorecard"]["dimensions"]:
             assert data1["scorecard"]["dimensions"][dim]["score"] == data2["scorecard"]["dimensions"][dim]["score"]
             assert data1["scorecard"]["dimensions"][dim]["grade"] == data2["scorecard"]["dimensions"][dim]["grade"]
+
+
+def test_diff_summary_uses_overall_delta():
+    """The summary must not use the last per-dimension delta."""
+    before = Scorecard(
+        dimensions={"alpha": DimensionScore(0, "F"), "zeta": DimensionScore(100, "A")},
+        overall_score=50,
+        overall_grade="F",
+        summary="",
+    )
+    after = Scorecard(
+        dimensions={"alpha": DimensionScore(100, "A"), "zeta": DimensionScore(0, "F")},
+        overall_score=60,
+        overall_grade="D",
+        summary="",
+    )
+
+    assert "Score improved by 10.0 points" in format_diff(before, after)

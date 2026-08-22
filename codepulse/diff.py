@@ -36,7 +36,7 @@ def checkout_commit(commit: str, repo_path: Path, workdir: Path) -> None:
     """Checkout a commit to a temporary work directory."""
     # Use git worktree for clean isolation
     subprocess.run(
-        ["git", "worktree", "add", "--force", str(workdir), commit],
+        ["git", "-c", f"core.hooksPath={workdir / '.codepulse-no-hooks'}", "worktree", "add", "--force", str(workdir), commit],
         cwd=repo_path, capture_output=True, check=True
     )
 
@@ -85,9 +85,9 @@ def format_diff(before: Scorecard, after: Scorecard) -> str:
     lines.append("")
 
     # Overall
-    delta = after.overall_score - before.overall_score
-    delta_color = GREEN if delta > 0 else (RED if delta < 0 else YELLOW)
-    lines.append(f"  {BOLD}Overall:{RESET}  {before.overall_score:.1f} -> {after.overall_score:.1f}  {delta_color}{BOLD}{delta:+.1f}{RESET}")
+    overall_delta = after.overall_score - before.overall_score
+    delta_color = GREEN if overall_delta > 0 else (RED if overall_delta < 0 else YELLOW)
+    lines.append(f"  {BOLD}Overall:{RESET}  {before.overall_score:.1f} -> {after.overall_score:.1f}  {delta_color}{BOLD}{overall_delta:+.1f}{RESET}")
     lines.append(f"  {BOLD}Grade:{RESET}     {before.overall_grade} -> {after.overall_grade}")
     lines.append("")
 
@@ -109,10 +109,10 @@ def format_diff(before: Scorecard, after: Scorecard) -> str:
     lines.append("")
 
     # Summary
-    if delta > 0:
-        lines.append(f"  {GREEN}[+] Score improved by {delta:.1f} points!{RESET}")
-    elif delta < 0:
-        lines.append(f"  {RED}[-] Score decreased by {abs(delta):.1f} points.{RESET}")
+    if overall_delta > 0:
+        lines.append(f"  {GREEN}[+] Score improved by {overall_delta:.1f} points!{RESET}")
+    elif overall_delta < 0:
+        lines.append(f"  {RED}[-] Score decreased by {abs(overall_delta):.1f} points.{RESET}")
     else:
         lines.append(f"  {YELLOW}[~] Score unchanged.{RESET}")
 
